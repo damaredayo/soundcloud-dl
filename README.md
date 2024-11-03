@@ -1,6 +1,6 @@
 # soundcloud-dl
 
-A fast and efficient Rust tool for downloading your liked tracks from SoundCloud.
+An easy, fast and efficient tool written in Rust for downloading songs from SoundCloud.
 
 ## Prerequisites
 
@@ -54,7 +54,7 @@ soundcloud-dl likes --limit 20
 ### Help
 
 ```text
-A tool to download SoundCloud liked tracks
+An easy, fast and efficient tool written in Rust for downloading songs from SoundCloud.
 
 Usage: soundcloud-dl [OPTIONS] [COMMAND]
 
