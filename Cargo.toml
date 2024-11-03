@@ -1,0 +1,20 @@
+[package]
+name = "soundcloud-dl"
+version = "0.1.0"
+edition = "2021"
+authors = ["Tyler Thompson <yoitscore@gmail.com>"]
+description = "A tool to download SoundCloud liked tracks"
+license = "MIT"
+repository = "https://github.com/damaredayo/soundcloud-dl"
+
+[dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+clap = { version = "4", features = ["derive"] }
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+tracing = { version = "0.1" }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+bytes = { version = "1" }
+thiserror = { version = "1.0" }
+id3 = { version = "1.0" }
+tempfile = { version = "3.13" }
