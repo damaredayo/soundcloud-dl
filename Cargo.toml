@@ -1,6 +1,6 @@
 [package]
 name = "soundcloud-dl"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 authors = ["Tyler Thompson <yoitscore@gmail.com>"]
 description = "A tool to download SoundCloud liked tracks"
