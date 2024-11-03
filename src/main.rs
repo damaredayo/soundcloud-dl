@@ -92,16 +92,20 @@ async fn main() -> Result<()> {
             None => std::path::PathBuf::from(filename),
         };
 
-        match audio::process_audio(&path, audio.data, &audio.file_ext, artwork) {
-            Ok(_) => tracing::info!(
-                "Downloaded track {} to {} | ({}/{})",
-                like.track.permalink_url,
-                path.display(),
-                i + 1,
-                cli.limit
-            ),
-            Err(e) => tracing::error!("Failed to write track {}: {}", like.track.permalink_url, e),
-        }
+        tokio::spawn(async move {
+            match audio::process_audio(&path, audio.data, &audio.file_ext, artwork) {
+                Ok(_) => tracing::info!(
+                    "Downloaded track {} to {} | ({}/{})",
+                    like.track.permalink_url,
+                    path.display(),
+                    i + 1,
+                    cli.limit
+                ),
+                Err(e) => {
+                    tracing::error!("Failed to write track {}: {}", like.track.permalink_url, e)
+                }
+            }
+        });
 
         if i + 1 >= cli.limit as usize {
             break;
