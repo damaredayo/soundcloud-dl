@@ -32,22 +32,49 @@ cd soundcloud-dl
 cargo build --release
 ```
 
-## Usage
+## Example Usage
 
 ```bash
-soundcloud-dl -a YOUR_OAUTH_TOKEN [OPTIONS]
+# Download track without saving token
+soundcloud-dl -a YOUR_TOKEN track https://soundcloud.com/user/track
+
+# Save token
+soundcloud-dl --auth "OAuth 2-123456-133742069-xDxDxDxDxDxDxD" --save-token
+
+# Download a single track
+soundcloud-dl track https://soundcloud.com/user/track
+
+# Download liked tracks
+soundcloud-dl likes --limit 50 --skip 10
+
+# Use saved token to download likes
+soundcloud-dl likes --limit 20
 ```
 
-### Options
+### Help
 
 ```text
--a, --auth <TOKEN>      Your SoundCloud OAuth token (required)
--o, --output <DIR>      Output directory [default: current directory]
--s, --offset <NUMBER>   Number of tracks to skip [default: 0]
--l, --limit <NUMBER>    Number of tracks to download [default: 10]
-    --chunk-size <SIZE> API request chunk size [default: 25]
--h, --help             Print help
--V, --version          Print version
+A tool to download SoundCloud liked tracks
+
+Usage: soundcloud-dl [OPTIONS] [COMMAND]
+
+Options:
+  -a, --auth <AUTH>      Your Soundcloud OAuth token (if not provided, will use stored token)
+  -t, --save-token       Save the provided OAuth token for future use
+      --clear-token      Clear the stored OAuth token
+  -o, --output <OUTPUT>  Output directory for downloaded files [default: .]
+  -h, --help             Print help
+  -V, --version          Print version
+
+Commands:
+  track
+    <URL>  URL of the track to download
+  likes
+    -s, --skip <SKIP>              Number of likes to skip [default: 0]
+    -l, --limit <LIMIT>            Maximum number of likes to download [default: 10]
+        --chunk-size <CHUNK_SIZE>  Number of likes to download in each chunk [default: 25]
+    -h, --help
+  help   Print this message or the help of the given subcommand
 ```
 
 ## License

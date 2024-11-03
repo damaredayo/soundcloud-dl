@@ -32,18 +32,18 @@ impl SoundcloudClient {
     ///
     /// # Returns
     /// Some([`SoundcloudClient`]) if OAuth token is provided, None otherwise
-    pub fn new(oauth: Option<String>) -> Option<Self> {
-        oauth.map(|oauth| Self {
-            http_client: Client::new(),
+    pub fn new(oauth: String) -> Self {
+        Self {
             oauth,
-        })
+            http_client: Client::new(),
+        }
     }
 
     /// Makes an HTTP request with rate limiting and retries
-    /// 
+    ///
     /// # Arguments
     /// * `req` - A reqwest request builder
-    /// 
+    ///
     /// # Returns
     /// Result containing the response or an error
     async fn make_request(&self, req: reqwest::RequestBuilder) -> Result<Response> {
@@ -250,34 +250,32 @@ impl SoundcloudClient {
     /// * `track` - [`Track`] metadata containing artwork information
     ///
     /// # Returns
-    /// Result containing a tuple of (image bytes, file extension) or an error
-    pub async fn download_cover(&self, track: &Track) -> Result<DownloadedFile> {
-        if let Some(cover_url) = &track.artwork_url {
-            let cover_url = cover_url.replace("-large", "-original");
+    /// Result containing an optional DownloadedFile, None if no cover exists
+    pub async fn download_cover(&self, track: &Track) -> Result<Option<DownloadedFile>> {
+        match &track.artwork_url {
+            Some(cover_url) => {
+                let cover_url = cover_url.replace("-large", "-original");
 
-            let file_ext = cover_url
-                .rsplit('/')
-                .next()
-                .and_then(|s| s.split('.').last())
-                .and_then(|s| s.split('?').next())
-                .unwrap_or("")
-                .to_string();
+                let file_ext = cover_url
+                    .rsplit('/')
+                    .next()
+                    .and_then(|s| s.split('.').last())
+                    .and_then(|s| s.split('?').next())
+                    .unwrap_or("")
+                    .to_string();
 
-            let cover_bytes = self
-                .make_request(self.http_client.get(&cover_url))
-                .await?
-                .bytes()
-                .await?;
+                let cover_bytes = self
+                    .make_request(self.http_client.get(&cover_url))
+                    .await?
+                    .bytes()
+                    .await?;
 
-            Ok(DownloadedFile {
-                data: cover_bytes,
-                file_ext,
-            })
-        } else {
-            Err(AppError::Io(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "No cover found",
-            )))
+                Ok(Some(DownloadedFile {
+                    data: cover_bytes,
+                    file_ext,
+                }))
+            }
+            None => Ok(None),
         }
     }
 }

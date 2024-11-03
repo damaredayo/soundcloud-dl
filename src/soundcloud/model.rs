@@ -36,6 +36,7 @@ pub struct Format {
 pub struct User {
     pub id: u64,
     pub username: String,
+    pub permalink: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]

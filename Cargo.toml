@@ -1,6 +1,6 @@
 [package]
 name = "soundcloud-dl"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2021"
 authors = ["Tyler Thompson <yoitscore@gmail.com>"]
 description = "A tool to download SoundCloud liked tracks"
@@ -14,9 +14,12 @@ reqwest = { version = "0.12", features = ["json"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
 tracing = { version = "0.1" }
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3" }
 bytes = { version = "1" }
 thiserror = { version = "1.0" }
 id3 = { version = "1.0" }
 tempfile = { version = "3.13" }
 rand = { version = "0.8" }
+futures = { version = "0.3" }
+directories = { version = "5.0" }
+toml = { version = "0.8" }

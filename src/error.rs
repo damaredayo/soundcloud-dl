@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+pub type Result<T> = std::result::Result<T, AppError>;
+
 #[derive(Error, Debug)]
 pub enum AppError {
     #[error("Network error: {0}")]
@@ -14,14 +16,15 @@ pub enum AppError {
     #[error("Audio processing error: {0}")]
     Audio(String),
 
-    #[error("ID3 tag error: {0}")]
-    Id3(#[from] id3::Error),
-
-    #[error("Recieved 429: Rate limited")]
+    #[error("Rate limited by SoundCloud API")]
     RateLimited,
 
-    #[error("JSON error: {0}")]
-    Json(#[from] serde_json::Error),
-}
+    #[error("Configuration error: {0}")]
+    Configuration(String),
 
-pub type Result<T> = std::result::Result<T, AppError>;
+    #[error("Parse error: {0}")]
+    Parse(#[from] serde_json::Error),
+
+    #[error("ID3 tag error: {0}")]
+    Id3(#[from] id3::Error),
+}

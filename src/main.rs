@@ -1,35 +1,15 @@
 mod audio;
+mod cli;
+mod config;
+mod downloader;
 mod error;
 mod ffmpeg;
 mod soundcloud;
 
-use clap::Parser;
-use error::{AppError, Result};
-use std::path::PathBuf;
-
-#[derive(Parser)]
-#[command(author, version, about, long_about = None)]
-struct Cli {
-    /// Your Soundcloud OAuth token
-    #[arg(short, long)]
-    auth: String,
-
-    /// Output directory for downloaded files
-    #[arg(short, long, default_value = ".")]
-    output: PathBuf,
-
-    /// Number of tracks to skip
-    #[arg(short, long, default_value = "0")]
-    skip: usize,
-
-    /// Number of tracks to download
-    #[arg(short, long, default_value = "10")]
-    limit: u32,
-
-    /// Chunk size for API requests
-    #[arg(long, default_value = "25")]
-    chunk_size: u32,
-}
+use cli::Cli;
+use cli::Commands;
+use downloader::Downloader;
+use error::Result;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -37,121 +17,60 @@ async fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
-    // Check FFmpeg is available
+    let handled_token = if cli.clear_token {
+        let config = config::Config::new()?;
+        config.clear_oauth_token()?;
+        tracing::info!("Cleared stored OAuth token");
+        true
+    } else {
+        false
+    };
+
+    if let Some(token) = &cli.auth {
+        if cli.save_token {
+            let mut config = config::Config::new()?;
+            config.save_oauth_token(token)?;
+            tracing::info!("Saved OAuth token for future use");
+            if cli.command.is_none() {
+                return Ok(());
+            }
+        }
+    }
+
+    if handled_token && cli.command.is_none() {
+        return Ok(());
+    }
+
     if !ffmpeg::is_ffmpeg_installed() {
-        eprintln!("FFmpeg is not installed. Please install FFmpeg first - see README.md for instructions.");
+        tracing::error!("FFmpeg is not installed. Please install FFmpeg first - see README.md for instructions.");
         std::process::exit(1);
     }
 
-    let client = soundcloud::SoundcloudClient::new(Some(cli.auth.clone())).ok_or_else(|| {
-        AppError::Io(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "Failed to create Soundcloud client",
-        ))
-    })?;
-
-    let me = client.get_me().await?;
-    tracing::info!("Fetched user info for {}", me.username);
-
-    if let Some(ref output) = Some(cli.output.clone()) {
-        std::fs::create_dir_all(&output)?;
-        tracing::info!("Created output directory at {:?}", output);
-    }
-
-    let likes = client.get_likes(me.id, cli.limit, cli.chunk_size).await?;
-
-    for (i, like) in likes.into_iter().skip(cli.skip).enumerate() {
-        let audio = match client.download_track(&like.track).await {
-            Ok(dl) => dl,
-            Err(e) => {
-                tracing::error!("Failed to download track {}: {}", like.track.title, e);
-                continue;
-            }
-        };
-
-        let artwork = client.download_cover(&like.track).await.ok();
-
-        let artist = match like.track.user.username.as_str() {
-            "" => like.track.user.id.to_string(),
-            username => username.to_string(),
-        };
-
-        let title = match like.track.title.as_str() {
-            "" => like.track.permalink,
-            title => title.to_string(),
-        };
-
-        let filename =
-            make_filename_os_friendly(format!("{} - {}.{}", artist, title, audio.file_ext));
-
-        let path = match Some(cli.output.clone()) {
-            Some(ref output) => output.join(filename),
-            None => std::path::PathBuf::from(filename),
-        };
-
-        tokio::spawn(async move {
-            match audio::process_audio(&path, audio.data, &audio.file_ext, artwork) {
-                Ok(_) => tracing::info!(
-                    "Downloaded track {} to {} | ({}/{})",
-                    like.track.permalink_url,
-                    path.display(),
-                    i + 1 + cli.skip,
-                    cli.limit
-                ),
-                Err(e) => {
-                    tracing::error!("Failed to write track {}: {}", like.track.permalink_url, e)
-                }
-            }
-        });
-
-        if i + 1 >= cli.limit as usize {
-            break;
+    match &cli.command {
+        Some(Commands::Track { url, output }) => {
+            let oauth_token = cli.resolve_auth_token()?;
+            let downloader = Downloader::new(oauth_token, &output)?;
+            downloader.download_track(url).await?;
+            tracing::info!("Track download completed successfully!");
+        }
+        Some(Commands::Likes {
+            skip,
+            limit,
+            chunk_size,
+            output,
+        }) => {
+            let oauth_token = cli.resolve_auth_token()?;
+            let downloader = Downloader::new(oauth_token, &output)?;
+            downloader
+                .download_likes(*skip, *limit, *chunk_size)
+                .await?;
+            tracing::info!("Likes download completed successfully!");
+        }
+        None => {
+            tracing::error!("No command specified. Use --help to see available commands.");
+            std::process::exit(1);
         }
     }
-
-    tracing::info!("Done!");
 
     Ok(())
-}
-
-/// Makes a filename safe for use on the operating system by removing invalid characters
-///
-/// # Arguments
-/// * `input` - The original filename
-///
-/// # Returns
-/// A sanitized filename string
-fn make_filename_os_friendly(input: String) -> String {
-    const INVALID_CHARS: &[char] = &['\\', '/', ':', '*', '?', '"', '<', '>', '|'];
-
-    let mut filename: String = input
-        .chars()
-        .filter_map(|c| {
-            if INVALID_CHARS.contains(&c) {
-                Some('_')
-            } else if c.is_whitespace() {
-                Some('_')
-            } else {
-                Some(c)
-            }
-        })
-        .collect();
-
-    #[cfg(target_os = "windows")]
-    {
-        const RESERVED_NAMES: [&str; 22] = [
-            "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7",
-            "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
-        ];
-
-        if RESERVED_NAMES.contains(&filename.as_str()) {
-            filename.push('_');
-        }
-    }
-
-    if filename.len() > 255 {
-        filename.truncate(255);
-    }
-
-    filename
 }

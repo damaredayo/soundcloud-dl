@@ -1,4 +1,4 @@
-mod model;
+pub mod model;
 mod rest;
 
 #[derive(Debug, Clone)]
