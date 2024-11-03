@@ -4,7 +4,6 @@ use id3::{TagLike, Version};
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::Path;
-use std::time::Instant;
 
 use crate::ffmpeg;
 use crate::soundcloud::DownloadedFile;
@@ -69,11 +68,9 @@ pub fn process_m4a<T: AsRef<Path>>(
     audio: Bytes,
     thumbnail: Option<DownloadedFile>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let now = Instant::now();
     if let Err(e) = ffmpeg::reformat_m4a(&path, audio, thumbnail) {
         return Err(e);
     }
-    println!("Reformatted in {:?}", now.elapsed());
 
     Ok(())
 }
