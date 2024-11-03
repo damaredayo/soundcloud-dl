@@ -99,7 +99,7 @@ async fn main() -> Result<()> {
                     "Downloaded track {} to {} | ({}/{})",
                     like.track.permalink_url,
                     path.display(),
-                    i + 1,
+                    i + 1 + cli.skip,
                     cli.limit
                 ),
                 Err(e) => {
