@@ -4,7 +4,7 @@ mod ffmpeg;
 mod soundcloud;
 
 use clap::Parser;
-use error::Result;
+use error::{AppError, Result};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -44,24 +44,25 @@ async fn main() -> Result<()> {
     }
 
     // Initialize FFmpeg
-    ffmpeg::init().expect("Failed to initialize FFmpeg");
+    ffmpeg::init()?;
     tracing::info!("FFmpeg initialized successfully");
 
-    let client = soundcloud::SoundcloudClient::new(Some(cli.auth.clone()))
-        .expect("Failed to create Soundcloud client");
+    let client = soundcloud::SoundcloudClient::new(Some(cli.auth.clone())).ok_or_else(|| {
+        AppError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Failed to create Soundcloud client",
+        ))
+    })?;
 
-    let me = client.get_me().await.expect("Failed to get user info");
+    let me = client.get_me().await?;
     tracing::info!("Fetched user info for {}", me.username);
 
     if let Some(ref output) = Some(cli.output.clone()) {
-        std::fs::create_dir_all(&output).expect("Failed to create output directory");
+        std::fs::create_dir_all(&output)?;
         tracing::info!("Created output directory at {:?}", output);
     }
 
-    let likes = client
-        .get_likes(me.id, cli.limit, cli.chunk_size)
-        .await
-        .expect("Failed to get likes");
+    let likes = client.get_likes(me.id, cli.limit, cli.chunk_size).await?;
 
     for (i, like) in likes.into_iter().skip(cli.offset as usize).enumerate() {
         let audio = match client.download_track(&like.track).await {

@@ -5,6 +5,7 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::Path;
 
+use crate::error::{AppError, Result};
 use crate::ffmpeg;
 use crate::soundcloud::DownloadedFile;
 
@@ -22,7 +23,7 @@ pub fn process_mp3<T: AsRef<Path>>(
     path: T,
     audio: Bytes,
     thumbnail: Option<DownloadedFile>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<()> {
     let file = File::create(&path)?;
     let mut writer = BufWriter::new(file);
     writer.write_all(&audio)?;
@@ -67,12 +68,8 @@ pub fn process_m4a<T: AsRef<Path>>(
     path: T,
     audio: Bytes,
     thumbnail: Option<DownloadedFile>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    if let Err(e) = ffmpeg::reformat_m4a(&path, audio, thumbnail) {
-        return Err(e);
-    }
-
-    Ok(())
+) -> Result<()> {
+    ffmpeg::reformat_m4a(&path, audio, thumbnail)
 }
 
 /// Processes and saves an audio file with the appropriate format handler
@@ -91,10 +88,13 @@ pub fn process_audio<T: AsRef<Path>>(
     audio: Bytes,
     audio_ext: &str,
     thumbnail: Option<DownloadedFile>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<()> {
     match audio_ext {
         "mp3" => process_mp3(path, audio, thumbnail),
         "m4a" => process_m4a(path, audio, thumbnail),
-        _ => Err("Unsupported audio format".into()),
+        _ => Err(AppError::Audio(format!(
+            "Unsupported audio format: {}",
+            audio_ext
+        ))),
     }
 }

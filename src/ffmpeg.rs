@@ -1,25 +1,25 @@
 use bytes::Bytes;
-use std::error::Error;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use tempfile::NamedTempFile;
 
+use crate::error::{AppError, Result};
 use crate::soundcloud::DownloadedFile;
 
 pub fn is_ffmpeg_installed() -> bool {
     Command::new("ffmpeg").arg("-version").output().is_ok()
 }
 
-pub fn init() -> Result<(), Box<dyn Error>> {
+pub fn init() -> Result<()> {
     if is_ffmpeg_installed() {
         Ok(())
     } else {
-        Err(
-            "FFmpeg is not installed. Please install it first - see README.md for instructions."
-                .into(),
-        )
+        Err(AppError::FFmpeg(
+            "FFmpeg is not installed. Please install it first - see README.md for instructions"
+                .to_string(),
+        ))
     }
 }
 
@@ -27,8 +27,11 @@ pub fn reformat_m4a<T: AsRef<Path>>(
     path: T,
     m4a: Bytes,
     thumbnail: Option<DownloadedFile>,
-) -> Result<(), Box<dyn Error>> {
-    let output_path = path.as_ref().to_str().ok_or("Invalid output path")?;
+) -> Result<()> {
+    let output_path = path
+        .as_ref()
+        .to_str()
+        .ok_or_else(|| AppError::FFmpeg("Invalid output path".to_string()))?;
 
     // Save the audio data to a temporary file
     let tmp_audio_file = NamedTempFile::new()?;
@@ -86,11 +89,10 @@ pub fn reformat_m4a<T: AsRef<Path>>(
     let status = cmd.status()?;
 
     if !status.success() {
-        return Err(format!(
+        return Err(AppError::FFmpeg(format!(
             "FFmpeg failed with exit code: {}",
             status.code().unwrap_or(1)
-        )
-        .into());
+        )));
     }
 
     Ok(())

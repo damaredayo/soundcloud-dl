@@ -7,6 +7,18 @@ pub enum AppError {
 
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
+
+    #[error("FFmpeg error: {0}")]
+    FFmpeg(String),
+
+    #[error("Audio processing error: {0}")]
+    Audio(String),
+
+    #[error("ID3 tag error: {0}")]
+    Id3(#[from] id3::Error),
+
+    #[error("Recieved 429: Rate limited")]
+    RateLimited,
 }
 
 pub type Result<T> = std::result::Result<T, AppError>;
