@@ -108,7 +108,7 @@ impl SoundcloudClient {
     ///
     /// # Returns
     /// Result containing a vector of [`Like`]s or an error
-    pub async fn get_likes(&self, user_id: u64, limit: i32, chunk_size: u32) -> Result<Vec<Like>> {
+    pub async fn get_likes(&self, user_id: u64, limit: u32, chunk_size: u32) -> Result<Vec<Like>> {
         let mut likes = Vec::new();
         let mut next_href = Some(make_track_likes_url(user_id, chunk_size));
 

@@ -20,11 +20,11 @@ struct Cli {
 
     /// Number of tracks to skip
     #[arg(short, long, default_value = "0")]
-    offset: i32,
+    skip: usize,
 
     /// Number of tracks to download
     #[arg(short, long, default_value = "10")]
-    limit: i32,
+    limit: u32,
 
     /// Chunk size for API requests
     #[arg(long, default_value = "25")]
@@ -64,7 +64,7 @@ async fn main() -> Result<()> {
 
     let likes = client.get_likes(me.id, cli.limit, cli.chunk_size).await?;
 
-    for (i, like) in likes.into_iter().skip(cli.offset as usize).enumerate() {
+    for (i, like) in likes.into_iter().skip(cli.skip).enumerate() {
         let audio = match client.download_track(&like.track).await {
             Ok(dl) => dl,
             Err(e) => {
