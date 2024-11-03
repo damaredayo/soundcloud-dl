@@ -142,6 +142,50 @@ impl SoundcloudClient {
         Ok(likes)
     }
 
+    /// Fetches track metadata from a SoundCloud URL
+    ///
+    /// # Arguments
+    /// * `url` - A SoundCloud track URL
+    ///
+    /// # Returns
+    /// Result containing [`Track`] metadata or an error. Errors can occur if:
+    /// * The URL is invalid or inaccessible
+    /// * The page doesn't contain valid hydration data
+    /// * The track data cannot be parsed
+    pub async fn track_from_url(&self, url: &str) -> Result<Track> {
+        let resp = self
+            .make_request(self.http_client.get(url))
+            .await?
+            .text()
+            .await?;
+
+        let hydration_data = resp
+            .split("window.__sc_hydration = ")
+            .nth(1)
+            .and_then(|s| s.split(";</script>").next())
+            .ok_or_else(|| {
+                AppError::Io(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Could not find hydration data",
+                ))
+            })?;
+
+        let hydration: serde_json::Value = serde_json::from_str(hydration_data)?;
+
+        if let Some(track_data) = hydration
+            .as_array()
+            .and_then(|arr| arr.iter().find(|item| item["hydratable"] == "sound"))
+            .and_then(|item| item.get("data"))
+        {
+            Ok(serde_json::from_value(track_data.clone())?)
+        } else {
+            Err(AppError::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Could not find track data",
+            )))
+        }
+    }
+
     /// Downloads a track's audio file
     ///
     /// # Arguments
