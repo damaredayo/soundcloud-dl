@@ -1,14 +1,16 @@
 use crate::error::{AppError, Result};
 use crate::soundcloud::model::{AudioResponse, GetLikesResponse, Like, Track, User};
-use reqwest::Client;
+use reqwest::{Client, Response, StatusCode};
+use std::time::Duration;
+use tokio::time::sleep;
 
 use super::{DownloadedFile, SoundcloudClient};
 
-// Remove this line since we're using our custom Result type
-// type Result<T> = std::result::Result<T, Box<dyn Error>>;
-
 const API_BASE: &str = "https://api-v2.soundcloud.com/";
 const ME_URL: &str = "https://api-v2.soundcloud.com/me";
+const MAX_RETRIES: u32 = 5;
+const INITIAL_RETRY_DELAY: Duration = Duration::from_secs(5);
+const MAX_RETRY_DELAY: Duration = Duration::from_secs(320);
 
 /// Creates a URL for fetching a user's track likes
 ///
@@ -37,22 +39,64 @@ impl SoundcloudClient {
         })
     }
 
+    /// Makes an HTTP request with rate limiting and retries
+    /// 
+    /// # Arguments
+    /// * `req` - A reqwest request builder
+    /// 
+    /// # Returns
+    /// Result containing the response or an error
+    async fn make_request(&self, req: reqwest::RequestBuilder) -> Result<Response> {
+        let mut retries = 0;
+        let mut delay = INITIAL_RETRY_DELAY;
+
+        loop {
+            match req
+                .try_clone()
+                .expect("request should be cloneable")
+                .send()
+                .await
+            {
+                Ok(resp) => {
+                    match resp.status() {
+                        StatusCode::TOO_MANY_REQUESTS => {
+                            if retries >= MAX_RETRIES {
+                                return Err(AppError::RateLimited);
+                            }
+
+                            tracing::warn!("Rate limited, waiting {:?} before retry", delay);
+                            sleep(delay).await;
+
+                            // Exponential backoff with jitter
+                            delay = std::cmp::min(
+                                delay * 2 + Duration::from_millis(rand::random::<u64>() % 1000),
+                                MAX_RETRY_DELAY,
+                            );
+                            retries += 1;
+                            continue;
+                        }
+                        _ => return Ok(resp),
+                    }
+                }
+                Err(e) => return Err(AppError::Network(e)),
+            }
+        }
+    }
+
     /// Fetches the current user's profile information
     ///
     /// # Returns
     /// Result containing [`User`] data or an error
     pub async fn get_me(&self) -> Result<User> {
-        println!("Getting user with oauth: {}", self.oauth);
         let resp = self
-            .http_client
-            .get(ME_URL)
-            .header("Authorization", &self.oauth)
-            .send()
+            .make_request(
+                self.http_client
+                    .get(ME_URL)
+                    .header("Authorization", &self.oauth),
+            )
             .await?;
 
-        let user = resp.json::<User>().await?;
-
-        Ok(user)
+        Ok(resp.json::<User>().await?)
     }
 
     /// Fetches a user's liked tracks
@@ -70,10 +114,11 @@ impl SoundcloudClient {
 
         while let Some(url) = next_href {
             let res = self
-                .http_client
-                .get(&url)
-                .header("Authorization", &self.oauth)
-                .send()
+                .make_request(
+                    self.http_client
+                        .get(&url)
+                        .header("Authorization", &self.oauth),
+                )
                 .await?
                 .json::<GetLikesResponse>()
                 .await?;
@@ -125,10 +170,11 @@ impl SoundcloudClient {
             })?;
 
         let resp = self
-            .http_client
-            .get(&transcoding.url)
-            .header("Authorization", format!("OAuth {}", self.oauth))
-            .send()
+            .make_request(
+                self.http_client
+                    .get(&transcoding.url)
+                    .header("Authorization", format!("OAuth {}", self.oauth)),
+            )
             .await?
             .json::<AudioResponse>()
             .await?;
@@ -143,9 +189,7 @@ impl SoundcloudClient {
             .to_string();
 
         let audio_file = self
-            .http_client
-            .get(&resp.url)
-            .send()
+            .make_request(self.http_client.get(&resp.url))
             .await?
             .bytes()
             .await?;
@@ -176,9 +220,7 @@ impl SoundcloudClient {
                 .to_string();
 
             let cover_bytes = self
-                .http_client
-                .get(&cover_url)
-                .send()
+                .make_request(self.http_client.get(&cover_url))
                 .await?
                 .bytes()
                 .await?;

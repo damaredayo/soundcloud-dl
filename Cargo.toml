@@ -18,3 +18,4 @@ bytes = { version = "1" }
 thiserror = { version = "1.0" }
 id3 = { version = "1.0" }
 tempfile = { version = "3.13" }
+rand = { version = "0.8" }
