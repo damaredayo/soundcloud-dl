@@ -9,8 +9,8 @@ use super::{DownloadedFile, SoundcloudClient};
 const API_BASE: &str = "https://api-v2.soundcloud.com/";
 const ME_URL: &str = "https://api-v2.soundcloud.com/me";
 const MAX_RETRIES: u32 = 5;
-const INITIAL_RETRY_DELAY: Duration = Duration::from_secs(5);
-const MAX_RETRY_DELAY: Duration = Duration::from_secs(320);
+const INITIAL_RETRY_DELAY: Duration = Duration::from_secs(30);
+const MAX_RETRY_DELAY: Duration = Duration::from_secs(500);
 
 /// Creates a URL for fetching a user's track likes
 ///
