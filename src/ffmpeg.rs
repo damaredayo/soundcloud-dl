@@ -12,17 +12,6 @@ pub fn is_ffmpeg_installed() -> bool {
     Command::new("ffmpeg").arg("-version").output().is_ok()
 }
 
-pub fn init() -> Result<()> {
-    if is_ffmpeg_installed() {
-        Ok(())
-    } else {
-        Err(AppError::FFmpeg(
-            "FFmpeg is not installed. Please install it first - see README.md for instructions"
-                .to_string(),
-        ))
-    }
-}
-
 pub fn reformat_m4a<T: AsRef<Path>>(
     path: T,
     m4a: Bytes,

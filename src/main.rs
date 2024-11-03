@@ -43,10 +43,6 @@ async fn main() -> Result<()> {
         std::process::exit(1);
     }
 
-    // Initialize FFmpeg
-    ffmpeg::init()?;
-    tracing::info!("FFmpeg initialized successfully");
-
     let client = soundcloud::SoundcloudClient::new(Some(cli.auth.clone())).ok_or_else(|| {
         AppError::Io(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
