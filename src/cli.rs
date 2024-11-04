@@ -16,6 +16,15 @@ pub struct Cli {
     #[arg(long)]
     pub clear_token: bool,
 
+    /// FFmpeg binary path (if not provided, will use `ffmpeg` from PATH or download it)
+    #[arg(long)]
+    pub ffmpeg_path: Option<String>,
+
+    /// Assume yes to all prompts
+    #[arg(short = 'y')]
+    pub yes: bool,
+
+    /// Subcommands
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
@@ -44,10 +53,17 @@ pub enum Commands {
         limit: u32,
 
         /// Number of likes to download in each chunk
-        #[arg(long, default_value = "25")]
+        #[arg(long, default_value = "50")]
         chunk_size: u32,
     },
-    // TODO: Playlist command
+    Playlist {
+        /// Output directory for downloaded files
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+
+        /// URL of the playlist to download
+        url: String,
+    },
 }
 
 impl Cli {

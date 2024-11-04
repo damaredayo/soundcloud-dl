@@ -4,6 +4,7 @@ use reqwest::{Client, Response, StatusCode};
 use std::time::Duration;
 use tokio::time::sleep;
 
+use super::model::Playlist;
 use super::{DownloadedFile, SoundcloudClient};
 
 const API_BASE: &str = "https://api-v2.soundcloud.com/";
@@ -184,6 +185,64 @@ impl SoundcloudClient {
                 "Could not find track data",
             )))
         }
+    }
+
+    /// Fetches playlist metadata from a SoundCloud URL
+    ///
+    /// # Arguments
+    /// * `url` - A SoundCloud playlist URL
+    ///
+    /// # Returns
+    /// Result containing [`Playlist`] metadata or an error. Errors can occur if:
+    /// * The URL is invalid or inaccessible
+    /// * The page doesn't contain valid hydration data
+    /// * The playlist data cannot be parsed
+    pub async fn playlist_from_url(&self, url: &str) -> Result<Playlist> {
+        let resp = self
+            .make_request(self.http_client.get(url))
+            .await?
+            .text()
+            .await?;
+
+        let hydration_data = resp
+            .split("window.__sc_hydration = ")
+            .nth(1)
+            .and_then(|s| s.split(";</script>").next())
+            .ok_or_else(|| {
+                AppError::Io(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Could not find hydration data",
+                ))
+            })?;
+
+        let hydration: serde_json::Value = serde_json::from_str(hydration_data)?;
+
+        if let Some(playlist_data) = hydration
+            .as_array()
+            .and_then(|arr| arr.iter().find(|item| item["hydratable"] == "playlist"))
+            .and_then(|item| item.get("data"))
+        {
+            println!("{}", serde_json::to_string_pretty(&playlist_data).unwrap());
+            Ok(serde_json::from_value(playlist_data.clone())?)
+        } else {
+            Err(AppError::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Could not find playlist data",
+            )))
+        }
+    }
+
+    pub async fn fetch_track(&self, id: u64) -> Result<Track> {
+        let url = format!("{}tracks/{}", API_BASE, id);
+        let resp = self
+            .make_request(
+                self.http_client
+                    .get(&url)
+                    .header("Authorization", &self.oauth),
+            )
+            .await?;
+
+        Ok(resp.json::<Track>().await?)
     }
 
     /// Downloads a track's audio file

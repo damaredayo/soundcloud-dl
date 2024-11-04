@@ -6,6 +6,52 @@ pub struct Like {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+pub struct Playlist {
+    pub permalink: String,
+    pub permalink_url: String,
+    pub title: String,
+    pub tracks: Vec<PlaylistTrack>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct PlaylistTrack {
+    pub id: u64,
+
+    pub artwork_url: Option<String>,
+    pub permalink: Option<String>,
+    pub permalink_url: Option<String>,
+    pub title: Option<String>,
+    pub media: Option<Media>,
+    pub user: Option<User>,
+}
+
+impl PlaylistTrack {
+    pub fn into_track(self) -> Option<Track> {
+        let PlaylistTrack {
+            artwork_url,
+            permalink,
+            permalink_url,
+            title,
+            media,
+            user,
+            ..
+        } = self;
+
+        let media = media?;
+        let user = user?;
+
+        Some(Track {
+            artwork_url,
+            permalink: permalink?,
+            permalink_url: permalink_url?,
+            title: title?,
+            media,
+            user,
+        })
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
 pub struct Track {
     pub artwork_url: Option<String>,
     pub permalink: String,

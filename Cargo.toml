@@ -1,10 +1,10 @@
 [package]
 name = "soundcloud-dl"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["Tyler Thompson <yoitscore@gmail.com>"]
 description = "An easy, fast and efficient tool written in Rust for downloading songs from SoundCloud."
-license = "MIT"
+license = "LGPL-3.0-or-later"
 repository = "https://github.com/damaredayo/soundcloud-dl"
 
 [dependencies]
@@ -23,3 +23,11 @@ rand = { version = "0.8" }
 futures = { version = "0.3" }
 directories = { version = "5.0" }
 toml = { version = "0.8" }
+which = { version = "7.0" }
+
+[target.'cfg(unix)'.dependencies]
+flate2 = { version = "1.0" }
+tar = { version = "0.4" }
+
+[target.'cfg(windows)'.dependencies]
+zip = { version = "2.2" }

@@ -62,6 +62,7 @@ Options:
   -a, --auth <AUTH>      Your Soundcloud OAuth token (if not provided, will use stored token)
   -t, --save-token       Save the provided OAuth token for future use
       --clear-token      Clear the stored OAuth token
+      --ffmpeg-path <FFMPEG_PATH>  FFmpeg binary path (if not provided, will use `ffmpeg` from PATH or download it)
   -o, --output <OUTPUT>  Output directory for downloaded files [default: .]
   -h, --help             Print help
   -V, --version          Print version

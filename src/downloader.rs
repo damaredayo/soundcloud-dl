@@ -1,6 +1,7 @@
-use crate::audio;
 use crate::error::Result;
+use crate::soundcloud::model::Playlist;
 use crate::soundcloud::{model::Track, SoundcloudClient};
+use crate::{ffmpeg, util};
 use futures::stream::{FuturesUnordered, StreamExt};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -12,12 +13,15 @@ pub struct Downloader {
     client: SoundcloudClient,
     output_dir: PathBuf,
     semaphore: Arc<Semaphore>,
+    pub ffmpeg: ffmpeg::FFmpeg<PathBuf>,
 }
 
 impl Downloader {
-    pub fn new(oauth_token: String, output: &PathBuf) -> Result<Self> {
-        let client = SoundcloudClient::new(oauth_token);
-
+    pub fn new(
+        client: SoundcloudClient,
+        output: &PathBuf,
+        ffmpeg: ffmpeg::FFmpeg<PathBuf>,
+    ) -> Result<Self> {
         std::fs::create_dir_all(&output)?;
         tracing::info!("Using output directory: {:?}", output);
 
@@ -25,6 +29,7 @@ impl Downloader {
             client,
             output_dir: output.clone(),
             semaphore: Arc::new(Semaphore::new(MAX_CONCURRENT_DOWNLOADS)),
+            ffmpeg,
         })
     }
 
@@ -33,7 +38,63 @@ impl Downloader {
         let track = self.client.track_from_url(url).await?;
 
         let path = self.process_track(&track).await?;
-        tracing::info!("Downloaded track {} to: {}", track.permalink_url, path.display());
+        tracing::info!(
+            "Downloaded track {} to: {}",
+            track.permalink_url,
+            path.display()
+        );
+
+        Ok(())
+    }
+
+    pub async fn download_playlist(&self, playlist: Playlist) -> Result<()> {
+        tracing::info!("Fetching playlist from: {}", playlist.permalink_url);
+
+        let tracks_len = playlist.tracks.len();
+
+        let mut futures = FuturesUnordered::new();
+
+        for (i, track) in playlist.tracks.into_iter().enumerate() {
+            let permit = self.semaphore.clone().acquire_owned().await.unwrap();
+            let progress = i + 1;
+
+            futures.push(tokio::spawn(async move {
+                let _permit = permit; // Keep permit alive for scope of task
+                (track, progress)
+            }));
+        }
+
+        while let Some(result) = futures.next().await {
+            let (track, progress) = result.unwrap();
+
+            let track_id = track.id;
+
+            let track = match track.into_track() {
+                Some(track) => track,
+                None => match self.client.fetch_track(track_id).await {
+                    Ok(track) => track,
+                    Err(e) => {
+                        tracing::error!("Failed to fetch track: {}", e);
+                        continue;
+                    }
+                },
+            };
+
+            match self.process_track(&track).await {
+                Ok(path) => {
+                    tracing::info!(
+                        "Downloaded track {} to: {} | ({}/{})",
+                        track.permalink_url,
+                        path.display(),
+                        progress,
+                        tracks_len,
+                    );
+                }
+                Err(e) => {
+                    tracing::error!("Failed to download track: {}", e);
+                }
+            }
+        }
 
         Ok(())
     }
@@ -89,64 +150,27 @@ impl Downloader {
 
         let path = self.prepare_file_path(track, &audio.file_ext);
 
-        audio::process_audio(&path, audio.data, &audio.file_ext, artwork)?;
+        self.process_audio(&path, audio.data, &audio.file_ext, artwork)?;
 
         Ok(path)
     }
 
     fn prepare_file_path(&self, track: &Track, ext: &str) -> PathBuf {
-
-        let username = sanitize(&track.user.username);
-        let artist = if is_empty(&username) {
+        let username = util::sanitize(&track.user.username);
+        let artist = if util::is_empty(&username) {
             track.user.permalink.clone()
         } else {
             track.user.username.clone()
         };
 
-        let title = if is_empty(&track.title) {
+        let title = if util::is_empty(&track.title) {
             track.permalink.clone()
         } else {
             track.title.clone()
         };
 
         let filename = format!("{} - {}.{}", artist, title, ext);
-        let safe_filename = sanitize(&filename);
+        let safe_filename = util::sanitize(&filename);
         self.output_dir.join(safe_filename)
     }
-}
-
-fn is_empty(s: &str) -> bool {
-    s.replace('_', "").trim().is_empty()
-}
-
-fn sanitize(name: &str) -> String {
-    const INVALID_CHARS: &[char] = &['\\', '/', ':', '*', '?', '"', '<', '>', '|'];
-    let mut filename = name
-        .chars()
-        .map(|c| {
-            if INVALID_CHARS.contains(&c) {
-                '_'
-            } else {
-                c
-            }
-        })
-        .collect::<String>();
-
-    #[cfg(target_os = "windows")]
-    {
-        const RESERVED_NAMES: &[&str] = &[
-            "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7",
-            "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
-        ];
-
-        if RESERVED_NAMES.contains(&filename.as_str()) {
-            filename.push('_');
-        }
-    }
-
-    if filename.len() > 255 {
-        filename.truncate(255);
-    }
-
-    filename
 }

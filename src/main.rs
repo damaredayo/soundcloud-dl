@@ -5,11 +5,15 @@ mod downloader;
 mod error;
 mod ffmpeg;
 mod soundcloud;
+mod util;
+
+use std::path::PathBuf;
 
 use cli::Cli;
 use cli::Commands;
 use downloader::Downloader;
 use error::Result;
+use soundcloud::SoundcloudClient;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -41,15 +45,28 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    if !ffmpeg::is_ffmpeg_installed() {
-        tracing::error!("FFmpeg is not installed. Please install FFmpeg first - see README.md for instructions.");
-        std::process::exit(1);
-    }
+    let ffmpeg = match cli.ffmpeg_path.as_ref().map_or_else(
+        || ffmpeg::FFmpeg::default(),
+        |path| ffmpeg::FFmpeg::new(PathBuf::from(path)),
+    ) {
+        Ok(ffmpeg) => ffmpeg,
+        Err(_) if cli.yes || prompt("FFmpeg is not installed. Do you want to install it?") => {
+            let path = ffmpeg::download_ffmpeg(cli.ffmpeg_path.as_ref()).await?;
+            ffmpeg::FFmpeg::new(path)?
+        }
+        _ => {
+            tracing::error!("FFmpeg is required to run this program. Exiting.");
+            std::process::exit(1);
+        }
+    };
+
+    let oauth_token = cli.resolve_auth_token()?;
+
+    let client = SoundcloudClient::new(oauth_token);
 
     match &cli.command {
         Some(Commands::Track { url, output }) => {
-            let oauth_token = cli.resolve_auth_token()?;
-            let downloader = Downloader::new(oauth_token, &output)?;
+            let downloader = Downloader::new(client, &output, ffmpeg)?;
             downloader.download_track(url).await?;
             tracing::info!("Track download completed successfully!");
         }
@@ -59,12 +76,27 @@ async fn main() -> Result<()> {
             chunk_size,
             output,
         }) => {
-            let oauth_token = cli.resolve_auth_token()?;
-            let downloader = Downloader::new(oauth_token, &output)?;
+            let downloader = Downloader::new(client, &output, ffmpeg)?;
             downloader
                 .download_likes(*skip, *limit, *chunk_size)
                 .await?;
             tracing::info!("Likes download completed successfully!");
+        }
+        Some(Commands::Playlist { url, output }) => {
+            let playlist = client.playlist_from_url(url).await?;
+
+            let default_title = if playlist.title.is_empty() {
+                playlist.permalink.clone()
+            } else {
+                playlist.title.clone()
+            };
+
+            let default_path = PathBuf::from(".").join(util::sanitize(&default_title));
+            let output = output.as_ref().unwrap_or(&default_path);
+
+            let downloader = Downloader::new(client, &output, ffmpeg)?;
+            downloader.download_playlist(playlist).await?;
+            tracing::info!("Playlist download completed successfully!");
         }
         None => {
             tracing::error!("No command specified. Use --help to see available commands.");
@@ -73,4 +105,16 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn prompt(msg: &str) -> bool {
+    use std::io::{self, Write};
+
+    print!("{} [Y/n]: ", msg);
+    io::stdout().flush().unwrap();
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).unwrap();
+
+    input.trim().to_lowercase() == "y" || input.trim().is_empty()
 }
