@@ -76,8 +76,7 @@ impl<P: AsRef<Path>> FFmpeg<P> {
 
         let mut cmd = Command::new(self.path().as_ref());
         cmd.args(&["-y", "-i", tmp_audio.path().to_str().unwrap()])
-            .args(&["-threads", "0"]) // Use all available CPU threads
-            .args(&["-preset", "ultrafast"]); // Fastest encoding preset
+            .args(&["-threads", "0"]); // Use all available CPU threads
 
         if let Some(thumb) = thumbnail {
             self.add_thumbnail_args(&mut cmd, &thumb)?;
@@ -101,14 +100,14 @@ impl<P: AsRef<Path>> FFmpeg<P> {
         let mut cmd = Command::new(self.path().as_ref());
         cmd.arg("-y")
             .args(&["-protocol_whitelist", "file,http,https,tcp,tls"])
-            .args(&["-threads", "0"]) 
+            .args(&["-threads", "0"])
             .args(&["-i", tmp_playlist.path().to_str().unwrap()]);
 
         if let Some(thumb) = thumbnail {
             self.add_thumbnail_args(&mut cmd, &thumb)?;
         } else {
             cmd.args(&["-c", "copy"]);
-        }        
+        }
 
         self.run_command(cmd, output_path)
     }
@@ -121,16 +120,29 @@ impl<P: AsRef<Path>> FFmpeg<P> {
 
         File::create(&tmp_thumb)?.write_all(&thumb.data)?;
 
+        // Add thumbnail input
+        cmd.args(&["-i", tmp_thumb.to_str().unwrap()]);
+
+        // Specify which streams to include
         cmd.args(&[
-            "-i",
-            tmp_thumb.to_str().unwrap(),
-            "-map", "0:a",
-            "-map", "1:v",
-            "-c:a", "copy",
-            "-c:v", "copy",
-            "-metadata:s:v", "title=Album cover",
-            "-metadata:s:v", "comment=Cover (front)",
-            "-disposition:v", "attached_pic",
+            "-map", "0:a", // Audio from first input
+            "-map", "1:v", // Video from second input
+        ]);
+
+        // Set codec options
+        cmd.args(&[
+            "-c:a", "copy", // Copy audio stream without re-encoding
+            "-c:v", "copy", // Copy video stream without re-encoding
+        ]);
+
+        // Set metadata for the thumbnail
+        cmd.args(&[
+            "-metadata:s:v",
+            "title=Album cover",
+            "-metadata:s:v",
+            "comment=Cover (front)",
+            "-disposition:v",
+            "attached_pic",
         ]);
 
         Ok(())
@@ -139,8 +151,10 @@ impl<P: AsRef<Path>> FFmpeg<P> {
     /// Runs FFmpeg command with common output arguments
     fn run_command(&self, mut cmd: Command, output_path: P) -> Result<()> {
         cmd.args(&[
-            "-movflags", "+faststart",
-            "-loglevel", "error",
+            "-movflags",
+            "+faststart",
+            "-loglevel",
+            "error",
             output_path.as_ref().to_str().unwrap(),
         ])
         .stdout(Stdio::null())
