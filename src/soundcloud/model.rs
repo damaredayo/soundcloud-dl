@@ -29,6 +29,7 @@ pub struct PlaylistTrack {
 impl PlaylistTrack {
     pub fn into_track(self) -> Option<Track> {
         let PlaylistTrack {
+            id,
             artwork_url,
             permalink,
             permalink_url,
@@ -42,6 +43,7 @@ impl PlaylistTrack {
         let user = user?;
 
         Some(Track {
+            id,
             artwork_url,
             permalink: permalink?,
             permalink_url: permalink_url?,
@@ -54,6 +56,7 @@ impl PlaylistTrack {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Track {
+    pub id: u64,
     pub artwork_url: Option<String>,
     pub permalink: String,
     pub permalink_url: String,

@@ -78,16 +78,16 @@ impl Downloader {
 
     /// Processes and saves an OGG file, currently without any additional metadata
     /// This may be extended in the future to support album art
-    /// 
+    ///
     /// # Arguments
     /// * `path` - Output path for the file
     /// * `audio` - Audio file bytes
     /// * `thumbnail` - Thumbnail image bytes
     /// * `thumbnail_ext` - Thumbnail image file extension
-    /// 
+    ///
     /// # Returns
     /// Result indicating success or failure
-    pub async fn process_ogg<P: AsRef<Path>> (
+    pub async fn process_ogg<P: AsRef<Path>>(
         &self,
         path: P,
         audio: Bytes,
@@ -106,7 +106,7 @@ impl Downloader {
         path: P,
         playlist_data: Bytes,
         thumbnail: Option<DownloadedFile>,
-    ) -> Result<()> {       
+    ) -> Result<()> {
         // Use FFmpeg to convert the concatenated segments to m4a
         self.ffmpeg.process_m3u8(
             Bytes::from(playlist_data),
