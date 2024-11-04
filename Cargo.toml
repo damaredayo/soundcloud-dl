@@ -1,6 +1,6 @@
 [package]
 name = "soundcloud-dl"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 authors = ["Tyler Thompson <yoitscore@gmail.com>"]
 description = "An easy, fast and efficient tool written in Rust for downloading songs from SoundCloud."

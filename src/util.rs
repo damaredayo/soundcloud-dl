@@ -27,3 +27,15 @@ pub fn sanitize(name: &str) -> String {
 
     filename
 }
+
+pub fn prompt(msg: &str) -> bool {
+    use std::io::{self, Write};
+
+    print!("{} [Y/n]: ", msg);
+    io::stdout().flush().unwrap();
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).unwrap();
+
+    input.trim().to_lowercase() == "y" || input.trim().is_empty()
+}
