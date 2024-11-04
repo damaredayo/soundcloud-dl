@@ -2,11 +2,7 @@
 
 An easy, fast and efficient tool written in Rust for downloading songs from SoundCloud.
 
-## Prerequisites
-
-- Rust 1.70 or higher
-- FFmpeg installed and available in PATH
-- SoundCloud OAuth token
+## Getting Started
 
 ### Getting Your OAuth Token
 
@@ -20,11 +16,17 @@ An easy, fast and efficient tool written in Rust for downloading songs from Soun
 
 ## Installation
 
+### Pre-built Binaries
+
+Head over to the [releases page](http://github.com/damaredayo/soundcloud-dl/releases) and download the latest binary for your platform.
+
+### Cargo
+
 ```bash
 cargo install --git https://github.com/damaredayo/soundcloud-dl
 ```
 
-Or clone the repository and build it manually:
+### Building from Source
 
 ```bash
 git clone https://github.com/damaredayo/soundcloud-dl
