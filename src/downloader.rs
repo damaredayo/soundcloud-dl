@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::soundcloud::model::{Format, Playlist};
+use crate::soundcloud::model::Format;
 use crate::soundcloud::{model::Track, SoundcloudClient};
 use crate::{ffmpeg, util};
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -37,6 +37,8 @@ impl Downloader {
         tracing::info!("Fetching track from: {}", url);
         let track = self.client.track_from_url(url).await?;
 
+        let track = self.client.fetch_track(track.id).await?;
+
         let path = self.process_track(&track).await?;
         tracing::info!(
             "Downloaded track {} to: {}",
@@ -47,10 +49,10 @@ impl Downloader {
         Ok(())
     }
 
-    pub async fn download_playlist(&self, playlist: Playlist) -> Result<()> {
-        tracing::info!("Fetching playlist from: {}", playlist.permalink_url);
+    pub async fn download_playlist(&self, id: u64) -> Result<()> {
+        let playlist = self.client.fetch_playlist(id).await?;
 
-        let playlist = self.client.fetch_playlist(playlist.id).await?;
+        tracing::info!("Fetching playlist from: {}", playlist.permalink_url);
 
         let tracks_len = playlist.tracks.len();
 
@@ -154,7 +156,8 @@ impl Downloader {
 
         let path = self.prepare_file_path(track, &audio_ext);
 
-        self.process_audio(&path, audio, &audio_ext, thumbnail).await?;
+        self.process_audio(&path, audio, &audio_ext, thumbnail)
+            .await?;
 
         Ok(path)
     }
@@ -165,7 +168,8 @@ impl Downloader {
             "audio/mp4" | "audio/x-m4a" => "m4a",
             "audio/ogg" => "ogg",
             _ => "m4a",
-        }.to_string()
+        }
+        .to_string()
     }
 
     fn prepare_file_path(&self, track: &Track, ext: &str) -> PathBuf {
