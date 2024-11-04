@@ -96,6 +96,7 @@ async fn main() -> Result<()> {
 
             let downloader = Downloader::new(client, &output, ffmpeg)?;
             downloader.download_playlist(playlist).await?;
+
             tracing::info!("Playlist download completed successfully!");
         }
         None => {

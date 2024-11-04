@@ -7,6 +7,7 @@ pub struct Like {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Playlist {
+    pub id: u64,
     pub permalink: String,
     pub permalink_url: String,
     pub title: String,
@@ -76,6 +77,7 @@ pub struct Transcoding {
 #[derive(Clone, Debug, Deserialize)]
 pub struct Format {
     pub protocol: String,
+    pub mime_type: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]

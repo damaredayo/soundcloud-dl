@@ -4,7 +4,7 @@ use reqwest::{Client, Response, StatusCode};
 use std::time::Duration;
 use tokio::time::sleep;
 
-use super::model::Playlist;
+use super::model::{Playlist, Transcoding};
 use super::{DownloadedFile, SoundcloudClient};
 
 const API_BASE: &str = "https://api-v2.soundcloud.com/";
@@ -222,7 +222,6 @@ impl SoundcloudClient {
             .and_then(|arr| arr.iter().find(|item| item["hydratable"] == "playlist"))
             .and_then(|item| item.get("data"))
         {
-            println!("{}", serde_json::to_string_pretty(&playlist_data).unwrap());
             Ok(serde_json::from_value(playlist_data.clone())?)
         } else {
             Err(AppError::Io(std::io::Error::new(
@@ -245,6 +244,19 @@ impl SoundcloudClient {
         Ok(resp.json::<Track>().await?)
     }
 
+    pub async fn fetch_playlist(&self, id: u64) -> Result<Playlist> {
+        let url = format!("{}playlists/{}", API_BASE, id);
+        let resp = self
+            .make_request(
+                self.http_client
+                    .get(&url)
+                    .header("Authorization", &self.oauth),
+            )
+            .await?;
+
+        Ok(resp.json::<Playlist>().await?)
+    }
+
     /// Downloads a track's audio file
     ///
     /// # Arguments
@@ -252,7 +264,7 @@ impl SoundcloudClient {
     ///
     /// # Returns
     /// Result containing a tuple of (audio bytes, file extension) or an error
-    pub async fn download_track(&self, track: &Track) -> Result<DownloadedFile> {
+    pub async fn download_track<'t>(&self, track: &'t Track) -> Result<(&'t Transcoding, DownloadedFile)> {
         let transcoding = track
             .media
             .transcodings
@@ -265,12 +277,21 @@ impl SoundcloudClient {
                     .iter()
                     .find(|t| t.format.protocol == "progressive" && t.quality == "sq")
             })
-            .ok_or_else(|| {
-                AppError::Io(std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    "No progressive transcoding found",
-                ))
-            })?;
+            .or_else(|| {
+                track
+                    .media
+                    .transcodings
+                    .iter()
+                    .find(|t| t.format.protocol == "hls" && t.quality == "hq")
+            })
+            .or_else(|| {
+                track
+                    .media
+                    .transcodings
+                    .iter()
+                    .find(|t| t.format.protocol == "hls" && t.quality == "sq")
+            })
+            .ok_or_else(|| AppError::Audio("No suitable transcodings found".to_string()))?;
 
         let resp = self
             .make_request(
@@ -282,25 +303,7 @@ impl SoundcloudClient {
             .json::<AudioResponse>()
             .await?;
 
-        let file_ext = resp
-            .url
-            .rsplit('/')
-            .next()
-            .and_then(|s| s.split('.').last())
-            .and_then(|s| s.split('?').next())
-            .unwrap_or("")
-            .to_string();
-
-        let audio_file = self
-            .make_request(self.http_client.get(&resp.url))
-            .await?
-            .bytes()
-            .await?;
-
-        Ok(DownloadedFile {
-            data: audio_file,
-            file_ext,
-        })
+        Ok((transcoding, self.download_bytes(&resp.url).await?))
     }
 
     /// Downloads a track's cover artwork
@@ -315,26 +318,33 @@ impl SoundcloudClient {
             Some(cover_url) => {
                 let cover_url = cover_url.replace("-large", "-original");
 
-                let file_ext = cover_url
-                    .rsplit('/')
-                    .next()
-                    .and_then(|s| s.split('.').last())
-                    .and_then(|s| s.split('?').next())
-                    .unwrap_or("")
-                    .to_string();
-
-                let cover_bytes = self
-                    .make_request(self.http_client.get(&cover_url))
-                    .await?
-                    .bytes()
-                    .await?;
-
-                Ok(Some(DownloadedFile {
-                    data: cover_bytes,
-                    file_ext,
-                }))
+                self.download_bytes(&cover_url).await.map(|file| Some(file))
             }
             None => Ok(None),
         }
+    }
+
+    pub async fn download_bytes(&self, url: &str) -> Result<DownloadedFile> {
+        let file_ext = url.rsplit('/')
+            .next()
+            .and_then(|s| s.split('.').last())
+            .and_then(|s| s.split('?').next())
+            .unwrap_or("")
+            .to_string();
+
+        let bytes = self
+            .make_request(
+                self.http_client
+                    .get(url)
+                    .header("Authorization", &self.oauth),
+            )
+            .await?
+            .bytes()
+            .await?;
+
+        Ok(DownloadedFile {
+            data: bytes,
+            file_ext,
+        })
     }
 }

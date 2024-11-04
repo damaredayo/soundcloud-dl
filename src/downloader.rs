@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::soundcloud::model::Playlist;
+use crate::soundcloud::model::{Format, Playlist};
 use crate::soundcloud::{model::Track, SoundcloudClient};
 use crate::{ffmpeg, util};
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -10,10 +10,10 @@ use tokio::sync::Semaphore;
 const MAX_CONCURRENT_DOWNLOADS: usize = 3;
 
 pub struct Downloader {
-    client: SoundcloudClient,
+    pub client: SoundcloudClient,
+    pub ffmpeg: ffmpeg::FFmpeg<PathBuf>,
     output_dir: PathBuf,
     semaphore: Arc<Semaphore>,
-    pub ffmpeg: ffmpeg::FFmpeg<PathBuf>,
 }
 
 impl Downloader {
@@ -49,6 +49,8 @@ impl Downloader {
 
     pub async fn download_playlist(&self, playlist: Playlist) -> Result<()> {
         tracing::info!("Fetching playlist from: {}", playlist.permalink_url);
+
+        let playlist = self.client.fetch_playlist(playlist.id).await?;
 
         let tracks_len = playlist.tracks.len();
 
@@ -145,14 +147,25 @@ impl Downloader {
     }
 
     async fn process_track(&self, track: &Track) -> Result<PathBuf> {
-        let audio = self.client.download_track(track).await?;
-        let artwork = self.client.download_cover(track).await?;
+        let (transcoding, audio) = self.client.download_track(track).await?;
+        let thumbnail = self.client.download_cover(track).await?;
 
-        let path = self.prepare_file_path(track, &audio.file_ext);
+        let audio_ext = Self::mime_type_to_ext(&transcoding.format);
 
-        self.process_audio(&path, audio.data, &audio.file_ext, artwork)?;
+        let path = self.prepare_file_path(track, &audio_ext);
+
+        self.process_audio(&path, audio, &audio_ext, thumbnail).await?;
 
         Ok(path)
+    }
+
+    fn mime_type_to_ext(format: &Format) -> String {
+        match format.mime_type.as_str().split(';').next().unwrap() {
+            "audio/mpeg" => "mp3",
+            "audio/mp4" | "audio/x-m4a" => "m4a",
+            "audio/ogg" => "ogg",
+            _ => "m4a",
+        }.to_string()
     }
 
     fn prepare_file_path(&self, track: &Track, ext: &str) -> PathBuf {

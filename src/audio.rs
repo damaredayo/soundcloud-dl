@@ -20,7 +20,7 @@ impl Downloader {
     ///
     /// # Returns
     /// Result indicating success or failure
-    pub fn process_mp3<P: AsRef<Path>>(
+    pub async fn process_mp3<P: AsRef<Path>>(
         &self,
         path: P,
         audio: Bytes,
@@ -66,7 +66,7 @@ impl Downloader {
     ///
     /// # Returns
     /// Result indicating success or failure
-    pub fn process_m4a<P: AsRef<Path>>(
+    pub async fn process_m4a<P: AsRef<Path>>(
         &self,
         path: P,
         audio: Bytes,
@@ -74,6 +74,47 @@ impl Downloader {
     ) -> Result<()> {
         self.ffmpeg
             .reformat_m4a(audio, thumbnail, path.as_ref().to_path_buf())
+    }
+
+    /// Processes and saves an OGG file, currently without any additional metadata
+    /// This may be extended in the future to support album art
+    /// 
+    /// # Arguments
+    /// * `path` - Output path for the file
+    /// * `audio` - Audio file bytes
+    /// * `thumbnail` - Thumbnail image bytes
+    /// * `thumbnail_ext` - Thumbnail image file extension
+    /// 
+    /// # Returns
+    /// Result indicating success or failure
+    pub async fn process_ogg<P: AsRef<Path>> (
+        &self,
+        path: P,
+        audio: Bytes,
+        _thumbnail: Option<DownloadedFile>,
+    ) -> Result<()> {
+        let file = File::create(path.as_ref())?;
+        let mut writer = BufWriter::new(file);
+        writer.write_all(&audio)?;
+        writer.flush()?;
+
+        Ok(())
+    }
+
+    pub async fn process_m3u8<P: AsRef<Path>>(
+        &self,
+        path: P,
+        playlist_data: Bytes,
+        thumbnail: Option<DownloadedFile>,
+    ) -> Result<()> {       
+        // Use FFmpeg to convert the concatenated segments to m4a
+        self.ffmpeg.process_m3u8(
+            Bytes::from(playlist_data),
+            thumbnail,
+            path.as_ref().to_path_buf(),
+        )?;
+
+        Ok(())
     }
 
     /// Processes and saves an audio file with the appropriate format handler
@@ -87,16 +128,21 @@ impl Downloader {
     ///
     /// # Returns
     /// Result indicating success or failure
-    pub fn process_audio<P: AsRef<Path>>(
+    pub async fn process_audio<P: AsRef<Path>>(
         &self,
         path: P,
-        audio: Bytes,
+        audio: DownloadedFile,
         audio_ext: &str,
         thumbnail: Option<DownloadedFile>,
     ) -> Result<()> {
+        if audio.file_ext == "m3u8" {
+            return self.process_m3u8(path, audio.data, thumbnail).await;
+        }
+
         match audio_ext {
-            "mp3" => self.process_mp3(path, audio, thumbnail),
-            "m4a" => self.process_m4a(path, audio, thumbnail),
+            "mp3" => self.process_mp3(path, audio.data, thumbnail).await,
+            "m4a" => self.process_m4a(path, audio.data, thumbnail).await,
+            "ogg" => self.process_ogg(path, audio.data, thumbnail).await,
             _ => Err(AppError::Audio(format!(
                 "Unsupported audio format: {}",
                 audio_ext
