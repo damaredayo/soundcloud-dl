@@ -13,18 +13,6 @@ const MAX_RETRIES: u32 = 5;
 const INITIAL_RETRY_DELAY: Duration = Duration::from_secs(30);
 const MAX_RETRY_DELAY: Duration = Duration::from_secs(500);
 
-/// Creates a URL for fetching a user's track likes
-///
-/// # Arguments
-/// * `user_id` - The ID of the user
-/// * `limit` - Maximum number of likes to fetch
-///
-/// # Returns
-/// A formatted URL string for the track likes endpoint
-fn make_track_likes_url(user_id: u64, limit: u32) -> String {
-    format!("{}users/{}/track_likes?limit={}", API_BASE, user_id, limit)
-}
-
 impl SoundcloudClient {
     /// Creates a new SoundCloud client instance
     ///
@@ -111,7 +99,10 @@ impl SoundcloudClient {
     /// Result containing a vector of [`Like`]s or an error
     pub async fn get_likes(&self, user_id: u64, limit: u32, chunk_size: u32) -> Result<Vec<Like>> {
         let mut likes = Vec::new();
-        let mut next_href = Some(make_track_likes_url(user_id, chunk_size));
+        let mut next_href = Some(format!(
+            "{}users/{}/track_likes?limit={}",
+            API_BASE, user_id, limit
+        ));
 
         while let Some(url) = next_href {
             let res = self
@@ -135,7 +126,10 @@ impl SoundcloudClient {
             if next_href.is_some() {
                 let remaining = limit as usize - likes.len();
                 if remaining < chunk_size as usize {
-                    next_href = Some(make_track_likes_url(user_id, remaining as u32));
+                    next_href = Some(format!(
+                        "{}users/{}/track_likes?limit={}",
+                        API_BASE, user_id, remaining
+                    ));
                 }
             }
         }
@@ -264,7 +258,10 @@ impl SoundcloudClient {
     ///
     /// # Returns
     /// Result containing a tuple of (audio bytes, file extension) or an error
-    pub async fn download_track<'t>(&self, track: &'t Track) -> Result<(&'t Transcoding, DownloadedFile)> {
+    pub async fn download_track<'t>(
+        &self,
+        track: &'t Track,
+    ) -> Result<(&'t Transcoding, DownloadedFile)> {
         let transcoding = track
             .media
             .transcodings
@@ -275,14 +272,14 @@ impl SoundcloudClient {
                     .media
                     .transcodings
                     .iter()
-                    .find(|t| t.format.protocol == "progressive" && t.quality == "sq")
+                    .find(|t| t.format.protocol == "hls" && t.quality == "hq")
             })
             .or_else(|| {
                 track
                     .media
                     .transcodings
                     .iter()
-                    .find(|t| t.format.protocol == "hls" && t.quality == "hq")
+                    .find(|t| t.format.protocol == "progressive" && t.quality == "sq")
             })
             .or_else(|| {
                 track
@@ -325,7 +322,8 @@ impl SoundcloudClient {
     }
 
     pub async fn download_bytes(&self, url: &str) -> Result<DownloadedFile> {
-        let file_ext = url.rsplit('/')
+        let file_ext = url
+            .rsplit('/')
             .next()
             .and_then(|s| s.split('.').last())
             .and_then(|s| s.split('?').next())
