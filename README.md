@@ -44,11 +44,11 @@ soundcloud-dl --auth "OAuth 2-123456-133742069-xDxDxDxDxDxDxD" --save-token
 # Download a single track
 soundcloud-dl track https://soundcloud.com/user/track
 
+# Download a playlist
+soundcloud-dl playlist https://soundcloud.com/user/playlist
+
 # Download liked tracks
 soundcloud-dl likes --limit 50 --skip 10
-
-# Use saved token to download likes
-soundcloud-dl likes --limit 20
 ```
 
 ### Help
@@ -75,6 +75,8 @@ Commands:
     -l, --limit <LIMIT>            Maximum number of likes to download [default: 10]
         --chunk-size <CHUNK_SIZE>  Number of likes to download in each chunk [default: 25]
     -h, --help
+  playlist
+    <URL>  URL of the playlist to download
   help   Print this message or the help of the given subcommand
 ```
 
