@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::soundcloud::model::Format;
+use crate::soundcloud::model::{Format, User};
 use crate::soundcloud::{model::Track, SoundcloudClient};
 use crate::{ffmpeg, util};
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -35,9 +35,24 @@ impl Downloader {
 
     pub async fn download_track(&self, url: &str) -> Result<()> {
         tracing::info!("Fetching track from: {}", url);
-        let track = self.client.track_from_url(url).await?;
+        let mut track = self.client.track_from_url(url).await?;
 
-        let track = self.client.fetch_track(track.id).await?;
+        if track
+            .media
+            .transcodings
+            .iter()
+            .find(|t| t.format.protocol == "progressive" && t.quality == "hq")
+            .or_else(|| {
+                track
+                    .media
+                    .transcodings
+                    .iter()
+                    .find(|t| t.format.protocol == "hls" && t.quality == "hq")
+            })
+            .is_none()
+        {
+            track = self.client.fetch_track(track.id).await?;
+        }
 
         let path = self.process_track(&track).await?;
         tracing::info!(
@@ -103,11 +118,16 @@ impl Downloader {
         Ok(())
     }
 
-    pub async fn download_likes(&self, skip: usize, limit: u32, chunk_size: u32) -> Result<()> {
-        let me = self.client.get_me().await?;
-        tracing::info!("Fetching likes for user: {}", me.username);
+    pub async fn download_likes(
+        &self,
+        user: &User,
+        skip: usize,
+        limit: u32,
+        chunk_size: u32,
+    ) -> Result<()> {
+        tracing::info!("Fetching likes for user: {}", user.username);
 
-        let likes = self.client.get_likes(me.id, limit, chunk_size).await?;
+        let likes = self.client.get_likes(user.id, limit, chunk_size).await?;
         let total = likes.len().min(limit as usize);
 
         let mut futures = FuturesUnordered::new();

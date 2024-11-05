@@ -36,7 +36,7 @@ async fn main() -> Result<()> {
 
     let output = cli
         .resolve_output_dir()
-        .ok_or_else(|| error::AppError::Configuration("Output directory not set".to_string()))?;
+        .unwrap_or_else(|| PathBuf::from("."));
 
     handle_command(&cli, output, client, ffmpeg).await?;
 
@@ -59,11 +59,14 @@ async fn handle_command(
             skip,
             limit,
             chunk_size,
+            user,
             ..
         }) => {
+            let user = client.resolve_user(user.clone()).await?;
+
             let downloader = Downloader::new(client, &output, ffmpeg)?;
             downloader
-                .download_likes(*skip, *limit, *chunk_size)
+                .download_likes(&user, *skip, *limit, *chunk_size)
                 .await?;
             tracing::info!("Likes download completed successfully!");
         }
