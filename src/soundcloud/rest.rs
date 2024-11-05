@@ -345,4 +345,44 @@ impl SoundcloudClient {
             file_ext,
         })
     }
+
+    pub async fn resolve_user(&self, username: Option<String>) -> Result<User> {
+        if username.is_none() {
+            return self.get_me().await;
+        }
+
+        let url = format!("https://soundcloud.com/{}", username.unwrap());
+
+        let resp = self
+            .make_request(self.http_client.get(&url))
+            .await?
+            .text()
+            .await?;
+
+        let hydration_data = resp
+            .split("window.__sc_hydration = ")
+            .nth(1)
+            .and_then(|s| s.split(";</script>").next())
+            .ok_or_else(|| {
+                AppError::Io(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Could not find hydration data",
+                ))
+            })?;
+
+        let hydration: serde_json::Value = serde_json::from_str(hydration_data)?;
+
+        if let Some(user_data) = hydration
+            .as_array()
+            .and_then(|arr| arr.iter().find(|item| item["hydratable"] == "user"))
+            .and_then(|item| item.get("data"))
+        {
+            Ok(serde_json::from_value(user_data.clone())?)
+        } else {
+            Err(AppError::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Could not find user data",
+            )))
+        }
+    }
 }
