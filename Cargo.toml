@@ -16,7 +16,7 @@ serde_json = { version = "1" }
 tracing = { version = "0.1" }
 tracing-subscriber = { version = "0.3" }
 bytes = { version = "1" }
-thiserror = { version = "1.0" }
+thiserror = { version = "2.0" }
 id3 = { version = "1.0" }
 tempfile = { version = "3.13" }
 rand = { version = "0.8" }
